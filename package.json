@@ -1,0 +1,38 @@
+{
+  "name": "express-mysql",
+  "version": "1.0.0",
+  "description": "PMMC",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "test": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^3.0.8",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.19.0",
+    "bootstrap": "^4.0.0-beta",
+    "cookie-parser": "^1.4.4",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "express-fileupload": "^1.1.6",
+    "express-handlebars": "^3.1.0",
+    "fs": "0.0.1-security",
+    "g": "^2.0.1",
+    "jquery": "^3.4.1",
+    "jsonwebtoken": "^8.5.1",
+    "multer": "^1.4.2",
+    "mysql": "^2.18.1",
+    "mysql2": "^2.1.0",
+    "ng2-search-filter": "^0.5.1",
+    "node-fetch": "^2.6.0",
+    "nodemailer": "^6.4.3",
+    "nodemon": "^2.0.2",
+    "popper.js": "^1.16.1",
+    "sequelize": "^4.38.0",
+    "serve-static": "^1.14.1"
+  }
+}

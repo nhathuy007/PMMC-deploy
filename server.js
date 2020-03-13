@@ -4,6 +4,7 @@ const bodyParser = require('body-parser')
 const app = express()
 const serveStatic = require('serve-static')
 const port = process.env.PORT || 3000
+const path = require('path');
 
 app.use(bodyParser.json())
 app.use(cors())
@@ -30,9 +31,10 @@ app.use(express.static('public'));
 
 /************** Use for deploy on AWS **************/
 app.use(express.static(__dirname + '/dist/client'));
-app.get('/*', function(req, res) {
+app.get('*', function(req, res) {
   res.sendFile(path.join(__dirname + '/dist/client'))
 });
+
 /**************************************************/
 
 app.listen(port , () =>{

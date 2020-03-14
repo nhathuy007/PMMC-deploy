@@ -32,7 +32,7 @@ app.use(express.static('public'));
 /************** Use for deploy on AWS **************/
 app.use(express.static(__dirname + '/dist/client'));
 app.get('*', function(req, res) {
-  res.sendFile(path.join(__dirname + '/dist/client'))
+  res.sendFile(path.join(__dirname + '/dist/client/index.html'))
 });
 
 /**************************************************/

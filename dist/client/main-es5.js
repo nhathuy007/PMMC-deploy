@@ -3473,7 +3473,7 @@
 
       static get EXPRESS_SERVER_URL() {
         // return (window.location.origin.toString() + "/"); 
-        return "http://localhost:3000/"; // return "http://ec2-35-161-182-188.us-west-2.compute.amazonaws.com:3000/";
+        return "http://ec2-54-219-216-92.us-west-1.compute.amazonaws.com:3000/";
       }
 
       static get ERR_USER_NOT_FOUND() {

@@ -30,6 +30,9 @@ const db = {}
    dialectOptions: {
      connectTimeout: 60000
    },
+   define: {
+    timestamps: false
+  },
    pool: { maxConnections: 5, maxIdleTime: 30},
    language: 'en'
  })

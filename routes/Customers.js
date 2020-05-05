@@ -5,33 +5,47 @@ const jwt = require('jsonwebtoken')
 const customers = express.Router()
 const bcrypt = require('bcryptjs')
 
-const Customer = require('../models/Customer')
+const Customer = require('../models/UserDetails')
 customers.use(cors())
 
 /******************************************
 *  PROVIDE CUSTOMER INFO FOR REGISTRATION
 *******************************************/
 customers.post('/customer-register', (req, res) => {
+    const customerID = req.body.UserPK
     const customer = {
-      CustomerPK: req.body.CustomerPK,
-      // UserFK: '0',
+      //CustomerPK: req.body.CustomerPK,      
       FirstName: req.body.FirstName,
       LastName: req.body.LastName,
       PhoneNo: req.body.PhoneNo,
-      Address: req.body.StreetAddress,
+      Address: req.body.Address,
       City: req.body.City,
       State: req.body.State,
       Zipcode: req.body.Zipcode,
       Subscribe: req.body.Subscribe
     }
   
-    Customer.create(customer)
-      .then(customer => {
-        let token = jwt.sign(customer.dataValues, process.env.SECRET_KEY, {
-          expiresIn: 1440
-        })
-          res.json({ token: token })
-        })
+    Customer.update(customer, {
+      where: {
+        UserPK: customerID
+      }
+    })
+      .then(result => {
+        // let token = jwt.sign(customer.dataValues, process.env.SECRET_KEY, {
+        //   expiresIn: 1440
+        // })
+        //   res.json({ token: token })
+        if (result == 1) {
+          res.send({
+            message: "Customer was created successfully."
+          });
+        }
+        else {
+          res.send({
+            message: "Customers route error: Cannot update user details."
+          });
+        }
+      })
       .catch(err => {
         res.send('errorExpressErr: ' + err)
       })
@@ -43,7 +57,7 @@ customers.post('/customer-register', (req, res) => {
 customers.get('/profile-info/:id', (req, res) => {
     Customer.findOne({
         where: {
-            CustomerPK: req.params.id
+          UserPK: req.params.id
         }
     })
     .then(customer => {
@@ -65,7 +79,7 @@ customers.get('/profile-info/:id', (req, res) => {
 customers.put('/update-customer-info/:id', (req,res) =>{
     const customerID = req.params.id
     Customer.update(req.body, {
-        where: {CustomerPK: customerID}
+        where: {UserPK: customerID}
     })
     .then(result => {
         if (result == 1) {

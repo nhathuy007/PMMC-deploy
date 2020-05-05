@@ -5,7 +5,8 @@ const app = express()
 const serveStatic = require('serve-static')
 const port = process.env.PORT || 3000
 const path = require('path');
-
+const fs = require('fs');
+const https = require('https');
 app.use(bodyParser.json())
 app.use(cors())
 app.use(
@@ -26,16 +27,42 @@ app.use('/service', Email)
 var Customer = require('./routes/Customers')
 app.use('/customers', Customer)
 
+var Schedule = require('./routes/Schedule')
+app.use('/schedule', Schedule)
+
+var Reservation = require('./routes/Reservation')
+app.use('/reservation', Reservation)
+
+var Payment = require('./routes/Payment')
+app.use('/payment', Payment)
+
+var NodeSchedule = require('./routes/Node-Schedule')
+app.use('/node-schedule', NodeSchedule)
+
 // Folder for photo
 app.use(express.static('public'));
 
-/************** Use for deploy on AWS **************/
+/************** Set static folder for deploy folder **************/
 app.use(express.static(__dirname + '/dist/client'));
-app.get('*', function(req, res) {
+app.get('/*', function(req, res) {
   res.sendFile(path.join(__dirname + '/dist/client/index.html'))
 });
 
-/**************************************************/
+/*****************************************************************/
+
+/************* HTTPS SERVER *************/
+// OPENSSL to create key 
+// openssl req -x509 -newkey rsa:4096 -keyout key.pem    -out cert.pem -days 365
+// https.createServer({
+//   key: fs.readFileSync('./key.pem'),
+//   cert: fs.readFileSync('./cert.pem'),
+//   passphrase: '123456pmmc'
+// }, app)
+// .listen(3000, function () {
+//  console.log('Example app listening on port 3000! Go to https://localhost:3000/')
+// })
+
+/**************************************/
 
 app.listen(port , () =>{
   console.log("Server started on port 3000");

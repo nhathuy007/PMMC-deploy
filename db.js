@@ -26,6 +26,9 @@ const sequelize = new Sequelize(process.env.AWZ_DB_NAME, process.env.AWZ_DB_USER
   logging: console.log,
   maxConcurrentQueries: 100,
   dialect: 'mysql',
+  define: {
+      timestamps: false
+  },
   dialectOptions: {
     connectTimeout: 60000
   },

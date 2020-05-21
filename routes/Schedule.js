@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const schedule = express.Router();
@@ -6,15 +7,22 @@ const bodyParser = require("body-parser");
 const Program = require("../models/Program");
 const IndividualProgramRequirement = require("../models/IndividualRequirement");
 const GroupProgramRequirement = require("../models/GroupRequirement");
+const ReservationHeader = require("../models/ReservationHeader");
 const Schedule = require("../models/Schedule");
 const SessionDetails = require("../models/SessionDetails");
 const ScheduleSetting = require("../models/ScheduleSetting");
 const BlackoutDate = require("../models/ProgramBlackoutDate");
 
-const Sequelize = require('sequelize');
+//Define veriable for Sequelize database
+const db = require('../db');
+const Sequelize = db.sequelize;
 const Op = Sequelize.Op;
 
+//Define node-mailer
+const emailService = require('./Email');
+
 schedule.use(bodyParser.json());
+schedule.use(bodyParser.urlencoded({ extended: true }));
 schedule.use(cors());
 
 /*************************************************************
@@ -541,7 +549,7 @@ schedule.post("/deactivate-session-details", (req, res) => {
    ADD NEW ADDITIONAL SESSION DETAILS
  ************************************/
 schedule.post("/add-new-additional-session-details", (req, res) => {
-  var startDate = (new Date(req.body.Start)).toISOString()
+  var startDate = (new Date(req.body.Start)).toISOString();
 
   SessionDetails.findAll({
     where: {
@@ -591,15 +599,57 @@ schedule.post("/add-new-additional-session-details", (req, res) => {
           //If additional session does not fall into any blackout date => create additional session
             SessionDetails.create(req.body)
             .then(newSession => {
-              res.json(newSession)
+              //check if other sessionDetails in the same Schedule Setting already had record in schedule table
+              var currentScheduleSettingPK = newSession.ScheduleSettingPK;
+              SessionDetails.findAll({
+                where:{
+                  ScheduleSettingPK: currentScheduleSettingPK,
+                  SessionDetailsPK: {[Op.not]: newSession.SessionDetailsPK},
+                  IsActive: true
+                }
+              })
+              .then(sessionDetailsList =>{
+                if(sessionDetailsList.length > 0){
+                  var SessionDetailsPKList = []
+                  sessionDetailsList.forEach(session => {
+                    SessionDetailsPKList.push(session.SessionDetailsPK)
+                  })
+                  //check if sessionDetailPK has record in schedule table, if yes => add missing schedule                  
+                  Schedule.findOne({
+                    where:{
+                      SessionDetailsPK:{[Op.in]: SessionDetailsPKList},
+                      IsActive: true
+                    }
+                  })
+                  .then(schedule => {
+                    if(schedule){
+                      console.log(schedule)
+                      var missingScheduleInfo = schedule.dataValues;
+                      missingScheduleInfo.SchedulePK = 0;
+                      missingScheduleInfo.SessionDetailsPK = newSession.SessionDetailsPK;
+                      Schedule.create(missingScheduleInfo)
+                        .then(newSchedule =>{
+                          res.json({message: "New session has been created and schedule has been added."})
+                        })
+                    }
+                    else{
+                      res.json({message: "New session has been created."})
+                    }
+                  })
+                }
+                else{
+                  res.json({message: "New session has been created."})
+                }
+              })
+
             })
         }
       })
     }
   })
-    .catch(err => {
-      res.send("errorExpressErr: " + err);
-    });
+  .catch(err => {
+    res.send("errorExpressErr: " + err);
+  });
 });
 
 /************************************
@@ -693,6 +743,29 @@ schedule.post("/update-additional-session-details", (req, res) => {
 });
 
 /**********************************************
+   FOR INDIVIDUAL PROGRAM ONLY
+   check if the session's is in range of the current schedule setting
+ **********************************************/
+schedule.post("/check-session-date-in-range-of-schedule-setting", (req,res) => {
+  ScheduleSetting.findOne({
+    where:{
+      ScheduleSettingPK: req.body.ScheduleSettingPK,
+      Start: {[Op.lte]: req.body.Start},
+      End: {[Op.gte]: req.body.Start}
+    }
+  })
+  .then(scheduleSetting =>{    
+    if(scheduleSetting){
+      res.send(true);
+    }
+    else{
+      res.send(false);
+    }
+  })
+});
+
+
+/**********************************************
    ADD NEW SCHEDULE RECORD TO SCHEDULE TABLE
  **********************************************/
 schedule.post("/add-new-schedule", (req, res) => {
@@ -704,7 +777,6 @@ schedule.post("/add-new-schedule", (req, res) => {
       res.send("errorExpressErr: " + err);
     });
 });
-
 
 /*************************************
   GET ALL PROGRAM SESSIONS DETAILS
@@ -724,18 +796,78 @@ schedule.get("/get-all-session-details", (req, res) => {
 });
 
 /**************************************
-  GET PROGRAM SESSION DETAILS BY ID
+  GET PROGRAM SESSION DETAILS BY PROGRAM PK
  **************************************/
-schedule.get("/get-session-details-by-id/:id", (req, res) => {
+schedule.get("/get-session-details-by-programpk/:id", (req, res) => {
   SessionDetails.findAll({
     where: {
       ProgramPK: req.params.id,
       IsActive: true
     },
-    order: [['Start', 'ASC']]
+    order: [['Start', 'ASC'],['ScheduleSettingPK', 'ASC']]    
   })
     .then(sessions => {      
       res.json(sessions);
+    })
+    .catch(err => {
+      res.send("error: " + err);
+    });
+});
+
+/**************************************
+INDIVIDUAL PROGRAMS  
+GET INDIVIDUAL PROGRAM SESSION DETAILS BY SCHEDULESETTINGPK
+ **************************************/
+schedule.get("/get-individual-session-details-by-sessiondetailpk-schedulesettingpk/:id", (req, res) => {
+  SessionDetails.findOne({
+    where:{
+      SessionDetailsPK: req.params.id
+    }
+  })
+  .then(session =>{
+    //get all SessionDetails with the same ScheduleSettingPK
+    SessionDetails.findAll({
+      where: {
+        ScheduleSettingPK: session.ScheduleSettingPK,
+        IsActive: true
+      },
+      order: [['Start', 'ASC']]
+    })
+      .then(sessions => {      
+        res.json(sessions);
+      })
+      .catch(err => {
+        res.send("error: " + err);
+      });
+  })
+  .catch(err => {
+        res.send("error: " + err);
+      });
+
+  
+});
+
+/**************************************
+        INDIVIDUAL PROGRAMS
+  GET ALL SESSION DETAILS BY PROGRAM PK
+ **************************************/
+schedule.get("/get-individual-session-details-by-programpk/:id", (req, res) => {
+  var query = `SELECT *
+                FROM pmmc.sessiondetails
+              INNER JOIN (
+                      SELECT ScheduleSettingPK, Min(Start) as MinDate
+                        FROM pmmc.sessiondetails
+                        GROUP BY ScheduleSettingPK
+                    ) as temp on sessiondetails.ScheduleSettingPK = temp.ScheduleSettingPK 
+                              and sessiondetails.Start = temp.MinDate
+              WHERE IsActive = 1 and ProgramPK = (:programPK)`;
+  Sequelize.query(query,{ 
+    replacements: {
+      programPK: req.params.id
+      },
+    type: Sequelize.QueryTypes.SELECT})
+    .then(sessionDetails =>{
+      res.json(sessionDetails)
     })
     .catch(err => {
       res.send("error: " + err);
@@ -758,6 +890,26 @@ schedule.get("/get-schedule-by-id-start-end/:session/:id/:start/:end",(req,res) 
   })
   .then((schedule) =>{
     res.json(schedule);
+  })
+  .catch((err) => {
+    res.send("error: " + err);
+  });
+});
+
+/***********************************
+  GET ALL PROGRAM SCHEDULES BY PROGRAMPK,
+  and SESSIONDETAILSPK
+ ***********************************/
+schedule.post("/get-schedules-by-programpk-sessiondetailpk/:programpk",(req,res) => {
+  Schedule.findAll({
+    where: {
+      SessionDetailsPK: {[Op.in]: req.body.SessionDetailsPKList},
+      ProgramPK: req.params.programpk,
+      IsActive: true
+    }
+  })
+  .then((schedules) =>{
+    res.json(schedules);
   })
   .catch((err) => {
     res.send("error: " + err);
@@ -800,6 +952,162 @@ schedule.get("/get-program-schedules-by-id/:id", (req, res) => {
     });
 });
 
+/*****************************************************************************************
+  GET ALL PROGRAM SCHEDULES THAT HAVE RESERVATION (FOR VIEW SCHEDULE PAGE)
+ ****************************************************************************************/
+schedule.get("/get-all-schedules-with-reservation-info", (req, res) => {
+  var query = `SELECT schedule.*, program.Name, program.ProgramType, 
+                SUM(rgd.AdultQuantity) as AdultQuantity, SUM(rgd.Age57Quantity) as Age57Quantity, 
+                SUM(rgd.Age810Quantity) as Age810Quantity, SUM(rgd.Age1112Quantity) as Age1112Quantity, 
+                SUM(rgd.Age1314Quantity) as Age1314Quantity, SUM(rgd.Age1415Quantity) as Age1415Quantity,
+                SUM(rgd.Age1517Quantity) as Age1517Quantity, SUM(rgd.TotalQuantity) as GroupTotalQuantity, 
+                Min(rid.ParticipantAge) as IndividualMinAge, Max(rid.ParticipantAge) as IndividualMaxAge, 
+                COUNT(rid.ParticipantAge) as IndividualTotalQuantity, sessiondetails.Color
+              FROM pmmc.schedule
+                LEFT JOIN pmmc.sessiondetails on schedule.SessionDetailsPK = sessiondetails.SessionDetailsPK 
+                INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+                INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK
+                LEFT JOIN pmmc.reservationgroupdetails as rgd on reservationheader.ReservationPK = rgd.ReservationPK 
+                  AND program.ProgramType = 0
+                LEFT JOIN pmmc.reservationindividualdetails as rid on reservationheader.ReservationPK = rid.ReservationPK 
+                  AND program.ProgramType = 1
+              WHERE schedule.CurrentNumberParticipant > 0
+              GROUP BY schedule.SchedulePK
+              ORDER BY schedule.Start desc, schedule.ProgramPK asc`;
+    Sequelize.query(query,{
+        type: Sequelize.QueryTypes.SELECT})
+      .then(scheduleInfo =>{
+        res.json(scheduleInfo);
+    })
+});
+
+/*****************************************************************************************
+  UPDATE SINGLE SCHEDULE and SEND EMAIL REGARDING THE CHANGES TO ALL ON-GOING RESERVATIONS
+   (FOR VIEW SCHEDULE PAGE)
+ ****************************************************************************************/
+schedule.post("/update-single-schedule-send-email-notification", (req, res) => {
+  if(req.body.Start >= req.body.End){
+    res.json({error: "End Time must be after Start Time"});
+  }
+  else{
+    Schedule.update({
+      Start: req.body.Start,
+      End: req.body.End
+    },{
+      where:{
+        SchedulePK: req.body.SchedulePK
+      }
+    })
+    .then(result =>{
+      if(result == 1){
+        var query = `SELECT reservationheader.*, users.Username, users.Email
+                    FROM pmmc.reservationheader
+                      INNER JOIN pmmc.users on users.UserPK = reservationheader.UserPK
+                    WHERE reservationheader.SchedulePK = (:schedulepk)`;
+        Sequelize.query(query,{ 
+          replacements: {
+              schedulepk: req.body.SchedulePK              
+            },
+          type: Sequelize.QueryTypes.SELECT})
+        .then(reservationInfo =>{
+            var emailObject = {
+              Start: req.body.Start,
+              End: req.body.End,
+              ProgramName: req.body.ProgramName,
+              mode: "updateSchedule",
+              EmailList: [],
+            }
+            //Loop through all reservationInfo and add email to EmailList
+            reservationInfo.forEach(reservation =>{
+              if(emailObject.EmailList.indexOf(reservation.Email) < 0){
+                emailObject.EmailList.push(reservation.Email);
+              }
+            })
+
+            //Send email to all current reservation upon the change
+            emailService.sendEmailReservationCancelation(emailObject, info => {
+              console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+              res.json({message: "Schedule has been updated and emails have been sent." });
+            });
+            
+        })
+
+        
+      }    
+    })
+    .catch(err => {
+      res.send("error: " + err);
+    });
+  }  
+});
+
+/*****************************************************************************************
+  REMOVE SINGLE SCHEDULE and SEND CANCELLATION EMAIL TO ALL ON-GOING RESERVATIONS
+   (FOR VIEW SCHEDULE PAGE)
+ ****************************************************************************************/
+schedule.post("/remove-single-schedule-send-email-cancellation", (req, res) => {
+  Schedule.update({
+    IsActive: false
+  },{
+    where:{
+      SchedulePK: req.body.SchedulePK
+    }
+  })
+  .then(result =>{
+    if(result == 1){
+      var query = `SELECT reservationheader.*, users.Username, users.Email
+                    FROM pmmc.reservationheader
+                      INNER JOIN pmmc.users on users.UserPK = reservationheader.UserPK
+                    WHERE reservationheader.SchedulePK = (:schedulepk)`;
+        Sequelize.query(query,{ 
+          replacements: {
+              schedulepk: req.body.SchedulePK              
+            },
+          type: Sequelize.QueryTypes.SELECT})
+        .then(reservationInfo => {
+          var emailObject = {
+            Start: req.body.Start,
+            End: req.body.End,
+            ProgramName: req.body.ProgramName,
+            mode: "cancelSchedule",
+            reasonCancel: req.body.reasonCancel,
+            EmailList: [],
+            ReservationPKList: []
+          }
+          //Loop through all reservationInfo and add email to EmailList
+          reservationInfo.forEach(reservation =>{            
+            if(emailObject.EmailList.indexOf(reservation.Email) < 0){
+              emailObject.EmailList.push(reservation.Email);              
+            }
+            emailObject.ReservationPKList.push(reservation.ReservationPK)
+          })
+
+          //Update reservation in reservationHeader table, change status to Canceled (4)
+          ReservationHeader.update({
+            ReservationStatus: process.env.RESERVATION_STATUS_CODE_CANCELLED,
+            IsActive: false
+          },{
+            where:{
+              ReservationPK: {[Op.in]: emailObject.ReservationPKList}
+            }
+          })
+          .then(result =>{
+              //Send email to all current reservation upon the change
+              emailService.sendEmailReservationCancelation(emailObject, info => {
+              console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+              res.json({message: "Schedule was deactivated and emails were sent"});
+              });
+          })
+          .catch(err => {
+            res.send("error: " + err);
+          });
+        })
+        .catch(err => {
+          res.send("error: " + err);
+        });         
+    }
+  })
+});
 
 /**********************************************
    GET ALL BLACKOUT DATE EXCEPTION ARRAY 
@@ -951,7 +1259,8 @@ schedule.post("/add-blackout-date", (req, res) => {
               {
                 where :{
                   ProgramPK: newBlackoutDate.ProgramPK,
-                  ScheduleSettingPK: 0,
+                  //ScheduleSettingPK: 0,
+                  RecurrenceRule: '',
                   Start: {
                     [Op.between]: [req.body.Start, req.body.End]
                   },
@@ -1145,39 +1454,89 @@ schedule.post("/set-program-color", (req,res) => {
 /**********************************************
           UPDATE NUMBER OF PARTICIPANT
  **********************************************/
-schedule.put("/update-number-participant/:id", (req,res) => {
+schedule.post("/update-number-participant/:id", (req,res) => {
+  var temp = req.body.value;
+ 
   Schedule.findOne({
     where :{
       SchedulePK: req.params.id 
     }
   })
   .then((result) => {
-    if(result){
-      console.log(req.body.quantity);
-      var temp = result.CurrentNumberParticipant + req.body.quantity;
-      result.update({
-        CurrentNumberParticipant: temp
-      })
-      .then(result =>{
-        if (result) {
-          res.send({
-           message: "NUMBER OF PARTICIPANT has been changed."
-          });
-        }
-        else {
-          res.send({
-           error: "Cannot update NUMBER OF PARTICIPANT."
-          });
-        }
-      })
-    }
+    temp = temp + result.CurrentNumberParticipant;
+    let isFull = (temp === result.MaximumParticipant ? true : false);
+
+    result.update({
+      CurrentNumberParticipant: temp,
+      IsFull: isFull
+    }).then(
+      res.json({
+        message: "NUMBER OF PARTICIPANT has been changed."
+    }))
+    
   })
   .catch(err => {
     res.send("error: " + err);
   });
 })
 
+/**********************************************
+        INDIVIDUAL PROGRAM
+BULK UPDATE NUMBER OF PARTICIPANT
+ **********************************************/
+schedule.post("/bulk-update-number-participant/:quantity", (req,res) => {
+  Schedule.findAll({
+    where:{
+      SchedulePK:{[Op.in]: req.body.SchedulePKList},
+      IsActive: true
+    }
+  })
+  .then(scheduleList =>{
+    if(scheduleList.length > 0){
+      var tempQuantity = parseInt(req.params.quantity) + parseInt(scheduleList[0].CurrentNumberParticipant);
+      let isFull = (tempQuantity === scheduleList[0].MaximumParticipant ? true : false);
 
+      Schedule.update({
+          CurrentNumberParticipant: tempQuantity,
+          IsFull: isFull
+        },{
+          where:{
+            SchedulePK:{[Op.in]: req.body.SchedulePKList},
+            IsActive: true
+          }
+      })
+      .then(result =>{
+        res.json({message:"All individual schedules has been updated"});
+      })
+    }
+    else{
+      res.send("error: There is no existing Schedule");
+    }
+  })
+  .catch(err => {
+    res.send("error: " + err);
+  });
+
+
+});
+
+
+/**********************************************
+          INDIVIDUAL PROGRAM
+BULK CREATE NEW SCHEDULES IN SCHEDULE TABLE
+IGNORE DUPLICATE
+ **********************************************/
+schedule.post("/bulk-create-new-schedules", (req,res) => {
+  Schedule.bulkCreate(req.body, {
+    updateOnDuplicate: ['CreatedBy']
+  })
+  .then(result =>{
+    res.json(result)
+  })
+  .catch(err => {
+    res.send("errorExpressErr: " + err);
+  })
+});
 
 // ========================END=====================
 module.exports = schedule;

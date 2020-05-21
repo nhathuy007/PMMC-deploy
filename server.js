@@ -3,7 +3,7 @@ const cors = require('cors')
 const bodyParser = require('body-parser')
 const app = express()
 const serveStatic = require('serve-static')
-const port = process.env.PORT || 8080
+const port = process.env.PORT || 3000
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -36,6 +36,9 @@ app.use('/reservation', Reservation)
 var Payment = require('./routes/Payment')
 app.use('/payment', Payment)
 
+var Report = require('./routes/Report')
+app.use('/report', Report)
+
 var NodeSchedule = require('./routes/Node-Schedule')
 app.use('/node-schedule', NodeSchedule)
 
@@ -52,19 +55,21 @@ app.get('/*', function(req, res) {
 
 /************* HTTPS SERVER *************/
 // OPENSSL to create key 
-// openssl req -x509 -newkey rsa:4096 -keyout key.pem    -out cert.pem -days 365
-// https.createServer({
-//   key: fs.readFileSync('./key.pem'),
-//   cert: fs.readFileSync('./cert.pem'),
-//   passphrase: '123456pmmc'
-// }, app)
-// .listen(3000, function () {
-//  console.log('Example app listening on port 3000! Go to https://localhost:3000/')
-// })
+// openssl genrsa -out server-key.pem 1024
+// openssl req -new -key server-key.pem -out server-csr.pem
+// openssl x509 -req -in server-csr.pem -signkey server-key.pem -out server-cert.pem
+
+https.createServer({
+  key: fs.readFileSync('./server-key.pem'),
+  cert: fs.readFileSync('./server-cert.pem')
+}, app)
+.listen(8080, function () {
+ console.log('Example app listening on port 3000! Go to https://localhost:8080/')
+})
 
 /**************************************/
 
-app.listen(port , () =>{
-  console.log("Server started on port 3000");
-});
+// app.listen(port , () =>{
+//   console.log("Server started on port 3000");
+// });
 

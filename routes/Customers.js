@@ -5,7 +5,13 @@ const jwt = require('jsonwebtoken')
 const customers = express.Router()
 const bcrypt = require('bcryptjs')
 
+//Define veriable for Sequelize database
+const db = require('../db');
+const Sequelize = db.sequelize;
+const Op = Sequelize.Op;
+
 const Customer = require('../models/UserDetails')
+const User = require("../models/User");
 customers.use(cors())
 
 /******************************************
@@ -98,6 +104,24 @@ customers.put('/update-customer-info/:id', (req,res) =>{
       })
 })
 
+/******************************************************************************
+*  GET ALL USERS (WITH DETAILS) CREATED WITHIN SPECIFIC TIME RANGE
+*******************************************************************************/
+customers.get('/get-most-recent-new-users-created', (req, res) => {
+  var query = `SELECT users.UserPK, users.Username, userdetails.FirstName, userdetails.LastName, 
+                  users.Email, cast(users.CreatedDate as date) as CreatedDate
+                FROM pmmc.users 
+                  INNER JOIN pmmc.userdetails on users.UserPK = userdetails.UserPK
+                WHERE users.IsActive = true
+                ORDER BY users.CreatedDate desc
+                LIMIT 10`;
+    Sequelize.query(query,{       
+        type: Sequelize.QueryTypes.SELECT})
+    .then(userInfo =>{
+      res.json(userInfo);
+    })
+})
 
+/*=============================== END ===============================*/
 module.exports = customers
 

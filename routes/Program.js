@@ -8,9 +8,10 @@ const fileUpload = require("express-fileupload");
 const Program = require("../models/Program");
 const IndividualProgramRequirement = require("../models/IndividualRequirement");
 const GroupProgramRequirement = require("../models/GroupRequirement");
+const Email = require('../models/Email');
 
 program.use(bodyParser.json());
-program.use(bodyParser.urlencoded({ extended: false }));
+program.use(bodyParser.urlencoded({ extended: true }));
 program.use(cors());
 program.use(fileUpload());
 
@@ -181,7 +182,18 @@ program.post("/add-program", (req, res) => {
           };
           GroupProgramRequirement.create(groupDetail)
             .then((program) => {
-              res.json(programPK);
+              var groupEmail = { 
+                EmailPK: programPK,
+                Type: 'gProgram', 
+                Subject: req.body.Name.slice(0,20) + ' Booking Confirmation',
+                Body: '<i>Your program with Pacific Marine Mammal Center has been confirmed! You are now registered for <b>{programName} on {programDate}</b> </i><br> <i>You currently have a remaining balance of {remainingBalance}. You can pay this through the user dashboard on our website.</i><br>  <i>We look forward to having you join us. See you soon! </i>',
+                IsActive: 1,
+                HasAttachments: 0,
+                AttachmentNames: null
+              }
+              Email.create(groupEmail).then(email => {
+                res.json(programPK);
+              })
             })
             .catch((err) => {
               res.send("err Insert Group Requirement" + err);
@@ -195,7 +207,18 @@ program.post("/add-program", (req, res) => {
           };
           IndividualProgramRequirement.create(individualDetail)
             .then((program) => {
-              res.json(programPK);
+              var individualEmail = { 
+                EmailPK: programPK,
+                Type: 'iProgram', 
+                Subject: req.body.Name.slice(0,20) + ' Booking Confirmation',
+                Body: '<i>Your program with Pacific Marine Mammal Center has been confirmed! You are now registered for <b>{programName} on {programDate}</b> </i><br> <i>We have processed your payment of {deposit}.</i><br>     <i>We look forward to having you join us. See you soon! </i>',
+                IsActive: 1,
+                HasAttachments: 0,
+                AttachmentNames: null
+              }
+              Email.create(individualEmail).then(email => {
+                res.json(programPK);
+              })
             })
             .catch((err) => {
               res.send("err Insert Individual Requirement" + err);
@@ -278,6 +301,7 @@ program.post("/update-g-program-requirement", (req, res) => {
           TeacherPhoneNo: req.body.TeacherPhoneNo,
           AlternativeDate: req.body.AlternativeDate,
           EducationPurpose: req.body.EducationPurpose,
+          OtherInfo: req.body.OtherInfo,
           CreatedBy: req.body.CreatedBy,
           CreatedDate: today,
         });

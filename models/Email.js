@@ -19,6 +19,12 @@ module.exports = db.sequelize.define(
         },
         IsActive: {
             type: Sequelize.BOOLEAN
+        },
+        HasAttachments: {
+            type: Sequelize.INTEGER
+        },
+        AttachmentNames: {
+            type: Sequelize.TEXT
         }
     }
 )

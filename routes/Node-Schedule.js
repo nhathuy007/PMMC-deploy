@@ -46,13 +46,13 @@ everydayRule.minute = 0;
 everydayRule.second = 0;
 everydayRule.dayOfWeek = new NodeSchedule.Range(0,6);
 
-var testRule = new NodeSchedule.RecurrenceRule();
-testRule.second = 6;
+// var testRule = new NodeSchedule.RecurrenceRule();
+// testRule.second = 6;
 /**********************************************
  * UPDATE SCHEDULE TABLE 
  * Set IsActive to "false" for schedule that pasts today's date
  **********************************************/
-NodeSchedule.scheduleJob(testRule, function(){
+NodeSchedule.scheduleJob(everydayRule, function(){
     console.log("Updating schedule table every day at 6AM")
     var todayDate = (new Date()).toISOString()
     Schedule.findAll({
@@ -92,12 +92,13 @@ NodeSchedule.scheduleJob(testRule, function(){
               });
 
             //TODO: send out post-program email to thank you, survey
-            var query = `(SELECT schedule.SchedulePK, schedule.ProgramPK, program.Name, schedule.Start, schedule.End, reservationheader.UserPK, users.Email
-                    FROM pmmc.schedule 
-                        INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK 
-                        INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK 
-                        INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK                         
-                    WHERE schedule.SchedulePK in (:schedulePKlist))`
+            var query = `(SELECT schedule.SchedulePK, schedule.ProgramPK, program.Name, 
+                            schedule.Start, schedule.End, reservationheader.UserPK, users.Email
+                        FROM pmmc.schedule 
+                            INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK 
+                            INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK 
+                            INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK                         
+                        WHERE schedule.SchedulePK in (:schedulePKlist))`
             Sequelize.query(query,{ 
                 replacements: {schedulePKlist: schedulePKArr},
                 type: Sequelize.QueryTypes.SELECT})

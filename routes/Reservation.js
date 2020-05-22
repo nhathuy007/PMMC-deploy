@@ -216,6 +216,58 @@ reservation.get("/get-all-reservation-details-for-view-schedule/:schedulepk/:pro
   })  
 });
 
+
+/****************************************************************
+ *  GET ALL INDIVIDUAL RESERVATION DETAILS FOR SCHEDULE MANAGEMENT
+ ****************************************************************/
+reservation.get("/get-all-individual-reservation-details-by-schedulepk-for-schedule-details/:schedulepk", 
+    (req, res) => {  
+    var query = `SELECT rid.*
+                  FROM pmmc.reservationheader
+                    INNER JOIN pmmc.reservationindividualdetails as rid 
+                      on reservationheader.ReservationPK = rid.ReservationPK
+                  WHERE reservationheader.ReservationStatus in (:ongoing,:attended,:completed)
+                    AND reservationheader.SchedulePK = (:schedulepk)
+                  ORDER BY reservationheader.ReservationPK`;
+    Sequelize.query(query,{
+      replacements: {
+        schedulepk: req.params.schedulepk,
+        ongoing: process.env.RESERVATION_STATUS_CODE_ON_GOING,
+        attended: process.env.RESERVATION_STATUS_CODE_ATTENDED,
+        completed: process.env.RESERVATION_STATUS_CODE_COMPLETED
+      }, 
+      type: Sequelize.QueryTypes.SELECT})
+    .then(reservationInfo =>{
+      res.json(reservationInfo);
+    })
+});
+
+/****************************************************************
+ *  GET ALL GROUP RESERVATION DETAILS FOR SCHEDULE MANAGEMENT
+ ****************************************************************/
+reservation.get("/get-all-group-reservation-details-by-schedulepk-for-schedule-details/:schedulepk", 
+    (req, res) => {  
+    var query = `SELECT rgd.*
+                  FROM pmmc.reservationheader
+                    INNER JOIN pmmc.reservationgroupdetails as rgd 
+                      on reservationheader.ReservationPK = rgd.ReservationPK
+                  WHERE reservationheader.ReservationStatus in (:ongoing,:attended,:completed)
+                    AND reservationheader.SchedulePK = (:schedulepk)
+                  ORDER BY reservationheader.ReservationPK`;
+    Sequelize.query(query,{
+      replacements: {
+        schedulepk: req.params.schedulepk,
+        ongoing: process.env.RESERVATION_STATUS_CODE_ON_GOING,
+        attended: process.env.RESERVATION_STATUS_CODE_ATTENDED,
+        completed: process.env.RESERVATION_STATUS_CODE_COMPLETED
+      }, 
+      type: Sequelize.QueryTypes.SELECT})
+    .then(reservationInfo =>{
+      res.json(reservationInfo);
+    })
+});
+
+
 /******************************************
  *       CREATE NEW RESERVATION HEADER    *
  ******************************************/

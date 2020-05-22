@@ -59,17 +59,17 @@ app.get('/*', function(req, res) {
 // openssl req -new -key server-key.pem -out server-csr.pem
 // openssl x509 -req -in server-csr.pem -signkey server-key.pem -out server-cert.pem
 
-https.createServer({
-  key: fs.readFileSync('./server-key.pem'),
-  cert: fs.readFileSync('./server-cert.pem')
-}, app)
-.listen(8080, function () {
- console.log('Example app listening on port 3000! Go to https://localhost:8080/')
-})
+// https.createServer({
+//   key: fs.readFileSync('./server-key.pem'),
+//   cert: fs.readFileSync('./server-cert.pem')
+// }, app)
+// .listen(8080, function () {
+//  console.log('Example app listening on port 3000! Go to https://localhost:8080/')
+// })
 
 /**************************************/
 
-// app.listen(port , () =>{
-//   console.log("Server started on port 3000");
-// });
+app.listen(port , () =>{
+  console.log("Server started on port 3000");
+});
 

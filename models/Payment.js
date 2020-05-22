@@ -28,6 +28,9 @@ module.exports = db.sequelize.define(
     CreatedDate: {
       type: Sequelize.DATE,
       defaultValue: Sequelize.NOW
+    },
+    IsRefund: {
+      type: Sequelize.BOOLEAN
     }
   },
   {

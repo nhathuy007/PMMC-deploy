@@ -955,7 +955,7 @@ schedule.get("/get-program-schedules-by-id/:id", (req, res) => {
 /*****************************************************************************************
   GET ALL PROGRAM SCHEDULES THAT HAVE RESERVATION (FOR VIEW SCHEDULE PAGE)
  ****************************************************************************************/
-schedule.get("/get-all-schedules-with-reservation-info", (req, res) => {
+schedule.get("/get-all-schedules-with-reservation-info-for-view-schedule", (req, res) => {
   var query = `SELECT schedule.*, program.Name, program.ProgramType, 
                 SUM(rgd.AdultQuantity) as AdultQuantity, SUM(rgd.Age57Quantity) as Age57Quantity, 
                 SUM(rgd.Age810Quantity) as Age810Quantity, SUM(rgd.Age1112Quantity) as Age1112Quantity, 
@@ -968,17 +968,39 @@ schedule.get("/get-all-schedules-with-reservation-info", (req, res) => {
                 INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
                 INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK
                 LEFT JOIN pmmc.reservationgroupdetails as rgd on reservationheader.ReservationPK = rgd.ReservationPK 
-                  AND program.ProgramType = 0
+                  AND program.ProgramType = (:group)
                 LEFT JOIN pmmc.reservationindividualdetails as rid on reservationheader.ReservationPK = rid.ReservationPK 
-                  AND program.ProgramType = 1
+                  AND program.ProgramType = (:individual)
               WHERE schedule.CurrentNumberParticipant > 0
               GROUP BY schedule.SchedulePK
               ORDER BY schedule.Start desc, schedule.ProgramPK asc`;
-    Sequelize.query(query,{
-        type: Sequelize.QueryTypes.SELECT})
+    Sequelize.query(query,{ 
+      replacements: {
+          group: process.env.PROGRAM_TYPE_CODE_GROUP_PROGRAM,
+          individual: process.env.PROGRAM_TYPE_CODE_INDIVIDUAL_PROGRAM
+        },
+      type: Sequelize.QueryTypes.SELECT})
       .then(scheduleInfo =>{
         res.json(scheduleInfo);
     })
+});
+
+/*****************************************************************************************
+  GET ALL SCHEDULES (FOR SCHEDULE MANAGEMENT)
+ ****************************************************************************************/
+schedule.get("/get-all-schedules-for-schedule-management", (req, res) => {
+  var query = `SELECT schedule.*, substr(schedule.Start,1,4) as Year, 
+                substr(schedule.Start,6,2) as Month, program.ProgramType
+              FROM pmmc.schedule
+                INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+              WHERE schedule.CurrentNumberParticipant > 0
+              GROUP BY YEAR, MONTH, schedule.SchedulePK
+              ORDER BY schedule.Start desc`;
+  Sequelize.query(query,{
+    type: Sequelize.QueryTypes.SELECT})
+    .then(scheduleInfo =>{
+      res.json(scheduleInfo);
+  })
 });
 
 /*****************************************************************************************

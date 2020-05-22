@@ -7,6 +7,7 @@ const path = require("path");
 const stripe = require("stripe")(process.env.STRIPE_SKEY);
 const Payment = require("../models/Payment");
 const ReservationHeader = require("../models/ReservationHeader");
+const Refund = require("../models/Refund");
 
 payment.use(bodyParser.json());         // to support JSON-encoded bodies
 payment.use(bodyParser.urlencoded({     // to support URL-encoded bodies
@@ -51,7 +52,7 @@ payment.post("/pay", (req, res) => {
  *              ISSUE A REFUND            *
  ******************************************/
 payment.post("/refund", (req, res) => {
-  var refund = req.body.amount;
+  var refund = req.body.amount * 100;       // Always multiple 100 for the amount
   var chargeToken = req.body.token;
 
   stripe.refunds
@@ -61,13 +62,44 @@ payment.post("/refund", (req, res) => {
     })
     .then((result) => {
       console.log("Refund Successful");
-      res.json({ message: "Successfully Refund items" });
+      
+      // Update PaymentPK IsRefund Status
+      Payment.findOne({
+        where: {
+          ChargeToken: chargeToken
+        },
+      })
+        .then((paid) => {
+          if (paid) {
+            paid.update({
+              IsRefund: true
+            });
+          }
+        })
+        .catch((err) => {
+          res.send("error: " + err + "   " + req.params.id);
+        });
+      res.json(result);
     })
     .catch((err) => {
       console.log(err + " Charge Fail");
       res.status(500).end();
     });
 });
+
+/******************************************
+ *       CREATE NEW REFUND DATA          *
+ ******************************************/
+payment.post("/create-refund", (req, res) => {
+  Refund.create(req.body)
+    .then((result) => {
+      res.json(result);
+    })
+    .catch((err) => {
+      res.send("err Create Refund Data " + err);
+    });
+});
+
 
 /******************************************
  *       CREATE NEW PAYMENT DATA          *
@@ -144,12 +176,13 @@ payment.get("/get-payment-by-user/:id", (req, res) => {
 });
 
 /******************************************
-      GET PAYMENT BY RESERVATION   
+      GET NON-REFUND PAYMENT BY RESERVATION   
  ******************************************/
 payment.get("/get-payment-by-reservation/:id", (req, res) => {
   Payment.findAll({
     where: {
       ReservationPK:  req.params.id,
+      IsRefund: false
     },
   })
     .then((result) => {

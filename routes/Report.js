@@ -158,9 +158,9 @@ report.get("/get-income-by-year-range/:start/:end", (req, res) => {
         replacements: {start: req.params.start, end:req.params.end },
         type: Sequelize.QueryTypes.SELECT})
     .then((paymentInfo) =>{        
-        var returnPaymentInfo = [];
+        var returnRevenueInfo = [];
         paymentInfo.forEach(payment =>{
-            var tempData = {
+            let tempData = {
                 year: payment.Year,
                 'jan' : 0,
                 'feb' : 0,
@@ -176,29 +176,133 @@ report.get("/get-income-by-year-range/:start/:end", (req, res) => {
                 'dec' : 0,
                 'total' : 0
             };
-            var lookupByYear = returnPaymentInfo.filter(x => x.year === payment.Year);
+            let lookupByYear = returnRevenueInfo.filter(x => x.year === payment.Year);
             if(lookupByYear.length === 0){  
                 tempData[monthLookUpTable[payment.Month]] = parseInt(payment.Total);
-                returnPaymentInfo.push(tempData);
+                returnRevenueInfo.push(tempData);
             }
             else{
                 lookupByYear[0][monthLookUpTable[payment.Month]] = parseInt(payment.Total);
             }            
         })
-
-        returnPaymentInfo.forEach(payment =>{
-            payment.total = payment.jan + payment.feb + payment.mar + payment.apr + payment.may
-                            + payment.jun + payment.jul + payment.aug + payment.sep + payment.oct
-                            + payment.nov + payment.dec
+        //Get refund amount
+        var query = `SELECT refund.RefundDate, year(refund.RefundDate) as Year, 
+                            month(refund.RefundDate) as Month, Round(sum(Amount/100),0) as Total
+                    FROM pmmc.refund
+                    WHERE year(refund.RefundDate) between (:start) and (:end)
+                    Group by Year, Month
+                    Order by Year desc`;
+        Sequelize.query(query,{ 
+            replacements: {start: req.params.start, end:req.params.end },
+            type: Sequelize.QueryTypes.SELECT})
+        .then(refundInfo =>{
+            refundInfo.forEach(refund =>{
+                let tempData = {
+                    year: refund.Year,
+                    'jan' : 0,
+                    'feb' : 0,
+                    'mar' : 0,
+                    'apr' : 0,
+                    'may' : 0,
+                    'jun' : 0,
+                    'jul' : 0,
+                    'aug' : 0,
+                    'sep' : 0,
+                    'oct' : 0,
+                    'nov' : 0,
+                    'dec' : 0,
+                    'total' : 0
+                };
+                let lookupByYear = returnRevenueInfo.filter(x => x.year === refund.Year);
+                if(lookupByYear.length === 0){  
+                    tempData[monthLookUpTable[refund.Month]] = (-1)*parseInt(refund.Total);
+                    returnRevenueInfo.push(tempData);
+                }
+                else{
+                    lookupByYear[0][monthLookUpTable[refund.Month]] -= parseInt(refund.Total);
+                } 
+            })
+            //Calculate the total revenue for each year
+            returnRevenueInfo.forEach(revenue =>{
+                revenue.total = revenue.jan + revenue.feb + revenue.mar + revenue.apr + revenue.may
+                                + revenue.jun + revenue.jul + revenue.aug + revenue.sep + revenue.oct
+                                + revenue.nov + revenue.dec
+            })
+            
+            res.json(returnRevenueInfo);
         })
+
         
-        res.json(returnPaymentInfo);
     })
     .catch(err => {
         res.send("errorExpressErr: " + err);
       }) 
     
 })
+
+/*****************************************
+* GET CAMP PROGRAM REPORT BY DATE RANGE
+******************************************/
+report.get("/get-camp-program-by-date-range/:StartDate/:EndDate", (req, res) => {
+    var query = `SELECT reservationheader.ReservationPK, program.Name, schedule.Start, schedule.End, 
+	                rid.ParticipantName, rid.ParticipantAge, rid.Gender, rid.MerchSize,
+                    rid.AllergyInfo, rid.SpecialInfo, rid.InsureProviderName, rid.InsureRecipientName, 
+                    rid.InsurePolicyNo, rid.InsurePhoneNo, rid.AuthorizedPickupName1, rid.AuthorizedPickupPhone1,
+                    rid.AuthorizedPickupName2, rid.AuthorizedPickupPhone2, rid.EarlyDropOff, rid.LatePickUp
+                FROM pmmc.reservationindividualdetails as rid, pmmc.reservationheader, pmmc.schedule, pmmc.program
+                WHERE rid.ReservationPK = reservationheader.ReservationPK 
+                    and reservationheader.SchedulePK = schedule.SchedulePK 
+                    and schedule.ProgramPK = program.ProgramPK 
+                    and Lower(program.Name) like 'camp%' 
+                    and program.ProgramType = (:individualProgramType)
+                    and schedule.Start between (:startDate) and (:endDate)`;
+    Sequelize.query(query,{ 
+        replacements: {
+            startDate   : req.params.StartDate, 
+            endDate     : req.params.EndDate,
+            individualProgramType   : process.env.PROGRAM_TYPE_CODE_INDIVIDUAL_PROGRAM
+        },
+        type: Sequelize.QueryTypes.SELECT})
+    .then(CampInfo =>{
+        if(CampInfo.length > 0){
+            CampInfo.forEach(camp =>{
+              if(camp.EarlyDropOff != '0000'){
+                let temp = camp.EarlyDropOff;
+                camp.EarlyDropOff = '';
+                camp.EarlyDropOff += (temp[0] == '1' ? 'Mon,' : '')
+                camp.EarlyDropOff += (temp[1] == '1' ? 'Tue,' : '')
+                camp.EarlyDropOff += (temp[2] == '1' ? 'Wed,' : '')
+                camp.EarlyDropOff += (temp[3] == '1' ? 'Thur' : '')
+                if(camp.EarlyDropOff.slice(-1) == ','){
+                  camp.EarlyDropOff = camp.EarlyDropOff.slice(0, -1) + ''
+                }
+              }
+              else{
+                camp.EarlyDropOff = "N/A";
+              }
+    
+              if(camp.LatePickUp != '0000'){
+                let temp = camp.LatePickUp;
+                camp.LatePickUp = '';
+                camp.LatePickUp += (temp[0] == '1' ? 'Mon,' : '')
+                camp.LatePickUp += (temp[1] == '1' ? 'Tue,' : '')
+                camp.LatePickUp += (temp[2] == '1' ? 'Wed,' : '')
+                camp.LatePickUp += (temp[3] == '1' ? 'Thur' : '')
+                if(camp.LatePickUp.slice(-1) == ','){
+                  camp.LatePickUp = camp.LatePickUp.slice(0, -1) + ''
+                }
+              }
+              else{
+                camp.LatePickUp = "N/A";
+              }
+            })
+          }
+        res.json(CampInfo);
+    })
+    .catch(err => {
+        res.send("errorExpressErr: " + err);
+      }) 
+});
 
 /*****************************************
 * GET MARKETING INFO BY YEAR RANGE
@@ -224,6 +328,83 @@ report.get("/get-marketing-info-by-year-range/:start/:end", (req, res) => {
       }) 
 });
 
+/*****************************************
+* GET REVENUE FOR LAST 7 DAYS
+******************************************/
+report.get("/get-revenue-last-7-days", (req,res) =>{
+    var query = `SELECT cast(CreatedDate as date) as FullDate, SUM(Total) as Income 
+                FROM pmmc.payment
+                WHERE CreatedDate >= DATE_ADD(CURDATE(), INTERVAL -7 DAY)
+                GROUP BY FullDate`;
+    Sequelize.query(query,{         
+        type: Sequelize.QueryTypes.SELECT})
+    .then(income =>{
+        //Get refund amount
+        var query = `SELECT cast(RefundDate as date) as FullDate, SUM(Amount) as Refund 
+                    FROM pmmc.refund
+                    WHERE RefundDate >= DATE_ADD(CURDATE(), INTERVAL -7 DAY)
+                    GROUP BY FullDate`;
+        Sequelize.query(query,{         
+            type: Sequelize.QueryTypes.SELECT})
+        .then(refund =>{
+            var returnRevenueInfo = [];
+            var todayDate = new Date();
+            var last7DaysDate = new Date();
+            last7DaysDate.setDate(todayDate.getDate()-7);
+            for (var d = last7DaysDate; d <= todayDate; d.setDate(d.getDate() + 1)) {
+                var tempObject = {
+                    "Date"  : d.toISOString().slice(0,10),
+                    "Revenue" : 0
+                };
+                var lookupByIncome = income.filter(x => x.FullDate === tempObject.Date);                
+                var lookupByRefund = refund.filter(x => x.FullDate === tempObject.Date);                
+                if(lookupByIncome.length != 0 && lookupByRefund.length != 0){
+                    tempObject.Revenue = (parseInt(lookupByIncome[0].Income) - parseInt(lookupByRefund[0].Refund))/100;
+                }
+                else if(lookupByIncome.length != 0){
+                    tempObject.Revenue = (parseInt(lookupByIncome[0].Income))/100;
+                }
+                else if(lookupByRefund.length != 0){
+                    tempObject.Revenue = ((-1)*parseInt(lookupByRefund[0].Refund))/100;
+                }
+                returnRevenueInfo.push(tempObject);
+            }
+            res.json(returnRevenueInfo);
+        })
+        .catch(err => {
+            res.send("errorExpressErr: " + err);
+          }) 
+    })
+    .catch(err => {
+        res.send("errorExpressErr: " + err);
+      }) 
+});
+
+/*****************************************
+* GET NEW RESERVATION BY PROGRAM TYPE FOR LAST 7 DAYS
+******************************************/
+report.get("/get-new-reservaiton-by-program-type-last-7-days", (req, res) => {
+    var query = `SELECT program.ProgramType, COUNT(ProgramType) as RevCount
+                FROM pmmc.reservationheader, pmmc.schedule, pmmc.program	
+                WHERE reservationheader.CreatedDate >= DATE_ADD(CURDATE(), INTERVAL -7 DAY)
+                    and reservationheader.ReservationStatus in (:ongoing,:pending)
+                    and schedule.SchedulePK = reservationheader.SchedulePK
+                    and schedule.ProgramPK = program.ProgramPK
+                GROUP BY program.ProgramType
+                ORDER BY program.ProgramType`;
+    Sequelize.query(query,{ 
+        replacements: {
+            ongoing:    process.env.RESERVATION_STATUS_CODE_ON_GOING, 
+            pending:    process.env.RESERVATION_STATUS_CODE_PENDING
+        },
+        type: Sequelize.QueryTypes.SELECT})
+    .then(reservationInfo =>{
+        res.json(reservationInfo);
+    })
+    .catch(err => {
+        res.send("errorExpressErr: " + err);
+      }) 
+});
 
 // ========================END=====================
 module.exports = report;

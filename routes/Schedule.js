@@ -622,8 +622,7 @@ schedule.post("/add-new-additional-session-details", (req, res) => {
                     }
                   })
                   .then(schedule => {
-                    if(schedule){
-                      console.log(schedule)
+                    if(schedule){                      
                       var missingScheduleInfo = schedule.dataValues;
                       missingScheduleInfo.SchedulePK = 0;
                       missingScheduleInfo.SessionDetailsPK = newSession.SessionDetailsPK;
@@ -747,21 +746,26 @@ schedule.post("/update-additional-session-details", (req, res) => {
    check if the session's is in range of the current schedule setting
  **********************************************/
 schedule.post("/check-session-date-in-range-of-schedule-setting", (req,res) => {
-  ScheduleSetting.findOne({
-    where:{
-      ScheduleSettingPK: req.body.ScheduleSettingPK,
-      Start: {[Op.lte]: req.body.Start},
-      End: {[Op.gte]: req.body.Start}
-    }
-  })
-  .then(scheduleSetting =>{    
-    if(scheduleSetting){
-      res.send(true);
-    }
-    else{
-      res.send(false);
-    }
-  })
+  if(req.body.ScheduleSettingPK === 0){
+    res.send(true);
+  }
+  else{
+    ScheduleSetting.findOne({
+      where:{
+        ScheduleSettingPK: req.body.ScheduleSettingPK,
+        Start: {[Op.lte]: req.body.Start},
+        End: {[Op.gte]: req.body.Start}
+      }
+    })
+    .then(scheduleSetting =>{    
+      if(scheduleSetting){
+        res.send(true);
+      }
+      else{
+        res.send(false);
+      }
+    })
+  }  
 });
 
 
@@ -940,8 +944,7 @@ schedule.get("/get-program-schedules-by-programpk/:id", (req, res) => {
 schedule.get("/get-program-schedules-by-id/:id", (req, res) => {
   Schedule.findAll({
     where: {
-      SchedulePK: req.params.id,
-      IsActive: true
+      SchedulePK: req.params.id
     }
   })
     .then(schedule => {
@@ -953,35 +956,75 @@ schedule.get("/get-program-schedules-by-id/:id", (req, res) => {
 });
 
 /*****************************************************************************************
-  GET ALL PROGRAM SCHEDULES THAT HAVE RESERVATION (FOR VIEW SCHEDULE PAGE)
+  GET ALL GROUP SCHEDULES THAT HAVE RESERVATION (FOR VIEW SCHEDULE PAGE)
  ****************************************************************************************/
-schedule.get("/get-all-schedules-with-reservation-info-for-view-schedule", (req, res) => {
+schedule.get("/get-group-schedules-with-reservation-info-for-view-schedule", (req, res) => {
   var query = `SELECT schedule.*, program.Name, program.ProgramType, 
                 SUM(rgd.AdultQuantity) as AdultQuantity, SUM(rgd.Age57Quantity) as Age57Quantity, 
                 SUM(rgd.Age810Quantity) as Age810Quantity, SUM(rgd.Age1112Quantity) as Age1112Quantity, 
                 SUM(rgd.Age1314Quantity) as Age1314Quantity, SUM(rgd.Age1415Quantity) as Age1415Quantity,
                 SUM(rgd.Age1517Quantity) as Age1517Quantity, SUM(rgd.TotalQuantity) as GroupTotalQuantity, 
+                sessiondetails.Color
+              FROM pmmc.schedule
+                LEFT JOIN pmmc.sessiondetails on schedule.SessionDetailsPK = sessiondetails.SessionDetailsPK 
+                INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+                INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK
+                LEFT JOIN pmmc.reservationgroupdetails as rgd on reservationheader.ReservationPK = rgd.ReservationPK                   
+              WHERE schedule.CurrentNumberParticipant > 0 AND program.ProgramType = (:group)
+              GROUP BY schedule.SchedulePK
+              ORDER BY schedule.Start desc, schedule.ProgramPK asc`;
+    Sequelize.query(query,{ 
+      replacements: {
+          group: process.env.PROGRAM_TYPE_CODE_GROUP_PROGRAM          
+        },
+      type: Sequelize.QueryTypes.SELECT})
+      .then(groupScheduleInfo =>{
+        res.json(groupScheduleInfo);
+    })
+});
+
+/*****************************************************************************************
+  GET ALL INDIVIDUAL SCHEDULES THAT HAVE RESERVATION (FOR VIEW SCHEDULE PAGE)
+ ****************************************************************************************/
+schedule.get("/get-individual-schedules-with-reservation-info-for-view-schedule", (req, res) => {
+  var query = `SELECT schedule.*, program.Name, sessiondetails.ScheduleSettingPK,program.ProgramType,                
                 Min(rid.ParticipantAge) as IndividualMinAge, Max(rid.ParticipantAge) as IndividualMaxAge, 
                 COUNT(rid.ParticipantAge) as IndividualTotalQuantity, sessiondetails.Color
               FROM pmmc.schedule
                 LEFT JOIN pmmc.sessiondetails on schedule.SessionDetailsPK = sessiondetails.SessionDetailsPK 
                 INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
-                INNER JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK
-                LEFT JOIN pmmc.reservationgroupdetails as rgd on reservationheader.ReservationPK = rgd.ReservationPK 
-                  AND program.ProgramType = (:group)
-                LEFT JOIN pmmc.reservationindividualdetails as rid on reservationheader.ReservationPK = rid.ReservationPK 
-                  AND program.ProgramType = (:individual)
-              WHERE schedule.CurrentNumberParticipant > 0
+                LEFT JOIN pmmc.reservationheader on schedule.SchedulePK = reservationheader.SchedulePK                
+                LEFT JOIN pmmc.reservationindividualdetails as rid on reservationheader.ReservationPK = rid.ReservationPK                   
+              WHERE schedule.CurrentNumberParticipant > 0 AND program.ProgramType = (:individual)
               GROUP BY schedule.SchedulePK
               ORDER BY schedule.Start desc, schedule.ProgramPK asc`;
     Sequelize.query(query,{ 
       replacements: {
-          group: process.env.PROGRAM_TYPE_CODE_GROUP_PROGRAM,
-          individual: process.env.PROGRAM_TYPE_CODE_INDIVIDUAL_PROGRAM
+          individual: process.env.PROGRAM_TYPE_CODE_INDIVIDUAL_PROGRAM          
         },
       type: Sequelize.QueryTypes.SELECT})
-      .then(scheduleInfo =>{
-        res.json(scheduleInfo);
+      .then(individualScheduleInfo =>{
+        var tempRevDataList = [];        
+        individualScheduleInfo.forEach(schedule =>{
+          if(schedule.IndividualMinAge != null && schedule.IndividualMaxAge != null){
+            let tempRevData = {
+              ScheduleSettingPK : schedule.ScheduleSettingPK,
+              SchedulePK : schedule.SchedulePK,
+              IndividualMinAge : schedule.IndividualMinAge,
+              IndividualMaxAge : schedule.IndividualMaxAge
+            }            
+            tempRevDataList.push(tempRevData);
+          }
+        });
+        
+        individualScheduleInfo.forEach(schedule =>{
+          let tempLookupSchedule = tempRevDataList.filter(x => x.ScheduleSettingPK === schedule.ScheduleSettingPK);
+          schedule.IndividualMinAge = tempLookupSchedule[0].IndividualMinAge;
+          schedule.IndividualMaxAge = tempLookupSchedule[0].IndividualMaxAge;
+          schedule.PrimarySchedulePK = tempLookupSchedule[0].SchedulePK;
+        });        
+        
+        res.json(individualScheduleInfo);
     })
 });
 
@@ -990,7 +1033,8 @@ schedule.get("/get-all-schedules-with-reservation-info-for-view-schedule", (req,
  ****************************************************************************************/
 schedule.get("/get-all-schedules-for-schedule-management", (req, res) => {
   var query = `SELECT schedule.*, substr(schedule.Start,1,4) as Year, 
-                substr(schedule.Start,6,2) as Month, program.ProgramType
+                substr(schedule.Start,6,2) as Month,
+                program.ProgramType, program.Name
               FROM pmmc.schedule
                 INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
               WHERE schedule.CurrentNumberParticipant > 0
@@ -1022,39 +1066,59 @@ schedule.post("/update-single-schedule-send-email-notification", (req, res) => {
     })
     .then(result =>{
       if(result == 1){
-        var query = `SELECT reservationheader.*, users.Username, users.Email
+        //Update time in session detail
+        SessionDetails.update({
+          Start: req.body.Start,
+          End: req.body.End
+        },{
+          where:{
+            SessionDetailsPK: req.body.SessionDetailsPK
+          }
+        })
+        .then(result =>{
+          var currentSchedulePK = req.body.SchedulePK;
+          if(req.body.ProgramType === parseInt(process.env.PROGRAM_TYPE_CODE_INDIVIDUAL_PROGRAM)){
+            currentSchedulePK = req.body.PrimarySchedulePK;
+          }
+          
+          var query = `SELECT reservationheader.*, users.Username, users.Email
                     FROM pmmc.reservationheader
                       INNER JOIN pmmc.users on users.UserPK = reservationheader.UserPK
                     WHERE reservationheader.SchedulePK = (:schedulepk)`;
-        Sequelize.query(query,{ 
-          replacements: {
-              schedulepk: req.body.SchedulePK              
-            },
-          type: Sequelize.QueryTypes.SELECT})
-        .then(reservationInfo =>{
-            var emailObject = {
-              Start: req.body.Start,
-              End: req.body.End,
-              ProgramName: req.body.ProgramName,
-              mode: "updateSchedule",
-              EmailList: [],
-            }
-            //Loop through all reservationInfo and add email to EmailList
-            reservationInfo.forEach(reservation =>{
-              if(emailObject.EmailList.indexOf(reservation.Email) < 0){
-                emailObject.EmailList.push(reservation.Email);
+          Sequelize.query(query,{ 
+            replacements: {
+                schedulepk: currentSchedulePK
+              },
+            type: Sequelize.QueryTypes.SELECT})
+          .then(reservationInfo =>{
+              //If this schedule has reservation (first class date in the list of all classes)
+              if(reservationInfo.length > 0){
+                var emailObject = {
+                  Start: req.body.Start,
+                  End: req.body.End,
+                  ProgramName: req.body.ProgramName,
+                  mode: "updateSchedule",
+                  EmailList: [],
+                }
+                //Loop through all reservationInfo and add email to EmailList
+                reservationInfo.forEach(reservation =>{
+                  if(emailObject.EmailList.indexOf(reservation.Email) < 0){
+                    emailObject.EmailList.push(reservation.Email);
+                  }
+                })               
+
+                //Send email to all current reservation upon the change
+                emailService.sendEmailReservationCancelation(emailObject, info => {
+                  console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+                  res.json({message: "Schedule and session details have been updated and emails have been sent." });
+                }); 
               }
+              else{
+                res.json({error: "Error sending Update Schedule email." });
+              }
+                         
             })
-
-            //Send email to all current reservation upon the change
-            emailService.sendEmailReservationCancelation(emailObject, info => {
-              console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
-              res.json({message: "Schedule has been updated and emails have been sent." });
-            });
-            
-        })
-
-        
+        })    
       }    
     })
     .catch(err => {

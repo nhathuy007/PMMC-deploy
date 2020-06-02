@@ -96,7 +96,7 @@ users.post("/login", (req, res) => {
       if (user) {
         if (bcrypt.compareSync(req.body.Password, user.Password)) {
           let token = jwt.sign(user.dataValues, process.env.SECRET_KEY, {
-            expiresIn: 1440
+            expiresIn: 9600
           });
           res.json({ token: token, user: user });
         } else {
@@ -177,7 +177,7 @@ users.get("/get-user-details/:id", (req, res) => {
 /****************************************
   UPDATE USER ACCOUNT DETAIL BY USERID
 ****************************************/
-users.put("/get-user-details/:id", (req, res) => {
+users.put("/update-user-details/:id", (req, res) => {
   const id = req.params.id;
   User.update(req.body, {
     where: { UserPk: id }

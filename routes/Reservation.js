@@ -10,6 +10,7 @@ const ReservationIndividualDetails = require("../models/ReservationIndividualDet
 const MarketingInfo = require("../models/MarketingInformation");
 const Payment = require("../models/Payment");
 const Schedule = require("../models/Schedule");
+const SessionDetails = require("../models/SessionDetails");
 
 reservation.use(bodyParser.json());         // to support JSON-encoded bodies
 reservation.use(bodyParser.urlencoded({     // to support URL-encoded bodies
@@ -110,12 +111,15 @@ async function getReservationBySchedulePK(schedulepk, callback){
  ***********************************************************/
 reservation.get("/get-all-reservation-details-for-reservation-management", (req, res) => {  
   var query = `SELECT  reservationheader.*, schedule.Start, schedule.End, userdetails.FirstName, 
-                userdetails.LastName, users.Email, program.Name, program.ProgramType, schedule.SessionDetailsPK
+                userdetails.LastName, users.Email, program.Name, program.ProgramType, 
+                schedule.SessionDetailsPK, sessiondetails.ScheduleSettingPK, payment.IsRefund
               FROM pmmc.reservationheader
-                INNER JOIN pmmc.schedule on schedule.SchedulePK = reservationheader.SchedulePK
-                INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK
-                INNER JOIN pmmc.userdetails on reservationheader.UserPK = userdetails.UserPK
-                INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+              INNER JOIN pmmc.schedule on schedule.SchedulePK = reservationheader.SchedulePK
+              INNER JOIN pmmc.sessiondetails on schedule.SessionDetailsPK = sessiondetails.SessionDetailsPK
+              INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK
+              INNER JOIN pmmc.userdetails on reservationheader.UserPK = userdetails.UserPK
+              INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+              LEFT JOIN pmmc.payment on payment.ReservationPK = reservationheader.ReservationPK
               ORDER BY schedule.Start desc, reservationheader.ReservationStatus`;
     Sequelize.query(query,{ 
         type: Sequelize.QueryTypes.SELECT})
@@ -131,9 +135,11 @@ reservation.get("/get-all-reservation-details-for-reservation-management", (req,
  ***********************************************************/
 reservation.get("/get-all-reservation-details-for-reservation-management-by-userpk/:id", (req, res) => {  
   var query = `SELECT  reservationheader.*, schedule.Start, schedule.End, userdetails.FirstName, 
-                userdetails.LastName, users.Email, program.Name, program.ProgramType, schedule.SessionDetailsPK
+                userdetails.LastName, users.Email, program.Name, program.ProgramType, 
+                schedule.SessionDetailsPK, sessiondetails.ScheduleSettingPK
               FROM pmmc.reservationheader
                 INNER JOIN pmmc.schedule on schedule.SchedulePK = reservationheader.SchedulePK
+                INNER JOIN pmmc.sessiondetails on schedule.SessionDetailsPK = sessiondetails.SessionDetailsPK
                 INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK
                 INNER JOIN pmmc.userdetails on reservationheader.UserPK = userdetails.UserPK
                 INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
@@ -238,6 +244,39 @@ reservation.get("/get-all-individual-reservation-details-by-schedulepk-for-sched
       }, 
       type: Sequelize.QueryTypes.SELECT})
     .then(reservationInfo =>{
+      if(reservationInfo.length > 0){
+        reservationInfo.forEach(reservation =>{
+          if(reservation.EarlyDropOff != '0000'){
+            let temp = reservation.EarlyDropOff;
+            reservation.EarlyDropOff = '';
+            reservation.EarlyDropOff += (temp[0] == '1' ? 'Mon,' : '')
+            reservation.EarlyDropOff += (temp[1] == '1' ? 'Tue,' : '')
+            reservation.EarlyDropOff += (temp[2] == '1' ? 'Wed,' : '')
+            reservation.EarlyDropOff += (temp[3] == '1' ? 'Thur' : '')
+            if(reservation.EarlyDropOff.slice(-1) == ','){
+              reservation.EarlyDropOff = reservation.EarlyDropOff.slice(0, -1) + ''
+            }
+          }
+          else{
+            reservation.EarlyDropOff = "N/A";
+          }
+
+          if(reservation.LatePickUp != '0000'){
+            let temp = reservation.LatePickUp;
+            reservation.LatePickUp = '';
+            reservation.LatePickUp += (temp[0] == '1' ? 'Mon,' : '')
+            reservation.LatePickUp += (temp[1] == '1' ? 'Tue,' : '')
+            reservation.LatePickUp += (temp[2] == '1' ? 'Wed,' : '')
+            reservation.LatePickUp += (temp[3] == '1' ? 'Thur' : '')
+            if(reservation.LatePickUp.slice(-1) == ','){
+              reservation.LatePickUp = reservation.LatePickUp.slice(0, -1) + ''
+            }
+          }
+          else{
+            reservation.LatePickUp = "N/A";
+          }
+        })
+      }
       res.json(reservationInfo);
     })
 });
@@ -265,6 +304,29 @@ reservation.get("/get-all-group-reservation-details-by-schedulepk-for-schedule-d
     .then(reservationInfo =>{
       res.json(reservationInfo);
     })
+});
+
+/****************************************************************************************
+ *  GET ALL GROUP RESERVATION DETAILS FOR ACTION BUTTON ON SCHEDULE MANAGEMENT
+ ****************************************************************************************/
+reservation.get("/get-group-reservation-for-schedule-management-by-schedulepk/:schedulepk", (req,res) => {
+    var query = `SELECT  reservationheader.*, schedule.Start, schedule.End, userdetails.FirstName, 
+                  userdetails.LastName, users.Email, program.Name, program.ProgramType, schedule.SessionDetailsPK
+                FROM pmmc.reservationheader
+                  INNER JOIN pmmc.schedule on schedule.SchedulePK = reservationheader.SchedulePK
+                  INNER JOIN pmmc.users on reservationheader.UserPK = users.UserPK
+                  INNER JOIN pmmc.userdetails on reservationheader.UserPK = userdetails.UserPK
+                  INNER JOIN pmmc.program on schedule.ProgramPK = program.ProgramPK
+                WHERE reservationheader.SchedulePK = (:schedulepk)
+                ORDER BY schedule.Start desc, reservationheader.ReservationStatus`;
+      Sequelize.query(query,{
+        replacements: {
+          schedulepk: req.params.schedulepk
+        },  
+          type: Sequelize.QueryTypes.SELECT})
+      .then(reservationInfo =>{
+        res.json(reservationInfo);
+      })
 });
 
 
@@ -486,64 +548,139 @@ reservation.post("/cancel-pending-reservation", (req, res) => {
  **********************************************************/
 reservation.post("/cancel-current-reservation", (req, res) => {
   //Update record in reservationheader table (status to canceled, isactive to false)
-  ReservationHeader.update({
-    ReservationStatus: process.env.RESERVATION_STATUS_CODE_CANCELLED,
-    IsActive: false
-  },{
-    where:{
-      ReservationPK: req.body.ReservationPK
-    }
-  })
-  .then(result =>{
-    if(result == 1){
-      //Find the record in schedule table 
-      
-      Schedule.findOne({
-        where: {
-          SchedulePK: req.body.SchedulePK
-        }
-      })
-      .then(schedule =>{
-        //Deduct schedule's CurrentNumberParticipant by the Number of Participant of reservation
-        //(if IsFull is true, fix to false)
-        Schedule.update({
-          CurrentNumberParticipant: schedule.CurrentNumberParticipant - req.body.NumberOfParticipant,
-          IsFull: false
-        },{
-          where:{
+  //*******************FOR GROUP PROGRAM***************************
+  if(req.body.ProgramType === parseInt(process.env.PROGRAM_TYPE_CODE_GROUP_PROGRAM)){
+    ReservationHeader.update({
+      ReservationStatus: process.env.RESERVATION_STATUS_CODE_CANCELLED    
+    },{
+      where:{
+        ReservationPK: req.body.ReservationPK
+      }
+    })
+    .then(result =>{
+      if(result == 1){
+        //Find the record in schedule table 
+        
+        Schedule.findOne({
+          where: {
             SchedulePK: req.body.SchedulePK
           }
         })
-        .then(result =>{
-          if(result == 1){           
-            var emailObject = {
-              Start: schedule.Start,
-              End: schedule.End,
-              ProgramName: req.body.ProgramName,
-              mode: req.body.mode,
-              reasonCancel: req.body.reasonCancel,
-              EmailList: [req.body.Email]
-            };
-            // emailService.sendEmailReservationCancelation(emailObject, info => {
-            //     console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
-            //     res.send({message: "Schedule and reservation has been updated"})
-            //   });            
-              res.send({message: "Schedule and reservation has been updated"})
-          }
-          else{
-            res.send({message: "Cannot update schedule and reservation"})
+        .then(schedule =>{
+          //Deduct schedule's CurrentNumberParticipant by the Number of Participant of reservation
+          //(if IsFull is true, fix to false)
+          Schedule.update({
+            CurrentNumberParticipant: schedule.CurrentNumberParticipant - req.body.NumberOfParticipant,
+            IsFull: false
+          },{
+            where:{
+              SchedulePK: req.body.SchedulePK
+            }
+          })
+          .then(result =>{
+            if(result == 1){           
+              var emailObject = {
+                Start: schedule.Start,
+                End: schedule.End,
+                ProgramName: req.body.ProgramName,
+                mode: req.body.mode,
+                reasonCancel: req.body.reasonCancel,
+                EmailList: [req.body.Email]
+              };
+              
+              emailService.sendEmailReservationCancelation(emailObject, info => {
+                  console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+                  res.send({message: "Schedule and reservation has been updated"})
+                });                            
+            }
+            else{
+              res.send({message: "Cannot update schedule and reservation"})
+            }
+          })
+        })      
+        
+      }
+      else{
+        res.send({message: "Cannnot find the reservationPK " + req.body.ReservationPK})
+      }
+    })
+    .catch(err => {
+      res.send("error: " + err);
+    });
+  }
+  //*******************FOR INDIVIDUAL PROGRAM***************************
+  else{
+    ReservationHeader.update({
+      ReservationStatus: process.env.RESERVATION_STATUS_CODE_CANCELLED    
+    },{
+      where:{
+        ReservationPK: req.body.ReservationPK
+      }
+    })
+    .then(result =>{
+      if(result == 1){
+        SessionDetails.findAll({
+          where:{
+            ScheduleSettingPK: req.body.ScheduleSettingPK,
+            IsActive: true
           }
         })
-      })      
-      
-    }
-    else{
-      res.send({message: "Cannnot find the reservationPK " + req.body.ReservationPK})
-    }
-  })
-  .catch(err => {
-    res.send("error: " + err);
-  });
+        .then(sessionDetails => {
+          //Update all SchedulePK associated with the ScheduleSettingPK
+          var sessionDetailsPKList = sessionDetails.map(session => session.SessionDetailsPK);
+          Schedule.findAll({
+            where:{
+              SessionDetailsPK:{[Op.in]: sessionDetailsPKList},
+              IsActive: true
+            }
+          })
+          .then(schedule =>{
+            if(schedule.length > 0){
+              var schedulePKList = schedule.map(schedule => schedule.SchedulePK);
+              let newNoParticipants = schedule[0].CurrentNumberParticipant - req.body.NumberOfParticipant;
+              Schedule.update({
+                CurrentNumberParticipant  :newNoParticipants,
+                IsFull: false
+              },{
+                where:{
+                  SchedulePK:{[Op.in]: schedulePKList},
+                  IsActive: true
+                }
+              })
+              .then(result =>{
+                if(result > 0){           
+                  var emailObject = {
+                    Start: schedule.Start,
+                    End: schedule.End,
+                    ProgramName: req.body.ProgramName,
+                    mode: req.body.mode,
+                    reasonCancel: req.body.reasonCancel,
+                    EmailList: [req.body.Email]
+                  };
+                  console.log(emailObject);
+                  emailService.sendEmailReservationCancelation(emailObject, info => {
+                      console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+                      res.send({message: "Schedule and reservation has been updated"})
+                    });                            
+                }
+                else{
+                  res.send({message: "Cannot update schedule and reservation"})
+                }
+              })
+              .catch(err => {
+                res.send("error: " + err);
+              });
+            }            
+          })
+        })
+      }
+    })
+    .catch(err => {
+      res.send("error: " + err);
+    });
+
+  }
+  
 
 });
 

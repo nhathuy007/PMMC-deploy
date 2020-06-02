@@ -15,12 +15,6 @@ payment.use(bodyParser.urlencoded({     // to support URL-encoded bodies
 })); 
 payment.use(cors());
 
-function calculateOrderAmount(amount) {
-  // Replace this constant with a calculation of the order's amount
-  // Calculate the order total on the server to prevent
-  // people from directly manipulating the amount on the client
-  return 1400;
-}
 
 /******************************************
  *            MAKE A CHARGE               *
@@ -30,6 +24,7 @@ payment.post("/pay", (req, res) => {
   var amount = req.body.amount;
   var email = req.body.email;
 
+  // The unit of money send to Stripe will need to multiple by 100
   stripe.charges
     .create({
       amount: amount * 100,
@@ -49,10 +44,11 @@ payment.post("/pay", (req, res) => {
 });
 
 /******************************************
- *              ISSUE A REFUND            *
+ *        ISSUE A REFUND                  *
  ******************************************/
 payment.post("/refund", (req, res) => {
-  var refund = req.body.amount * 100;       // Always multiple 100 for the amount
+   // The unit of money send to Stripe will need to multiple by 100
+  var refund = req.body.amount * 100;       
   var chargeToken = req.body.token;
 
   stripe.refunds
@@ -176,12 +172,13 @@ payment.get("/get-payment-by-user/:id", (req, res) => {
 });
 
 /******************************************
-      GET NON-REFUND PAYMENT BY RESERVATION   
+      GET REFUNDABLE PAYMENT BY RESERVATION   
  ******************************************/
 payment.get("/get-payment-by-reservation/:id", (req, res) => {
   Payment.findAll({
     where: {
       ReservationPK:  req.params.id,
+      PaymentType: process.env.PAYMENT_TYPE_CODE_CARD,
       IsRefund: false
     },
   })
@@ -196,6 +193,57 @@ payment.get("/get-payment-by-reservation/:id", (req, res) => {
       res.send("error: " + err + "   " + req.params.id);
     });
 });
+
+
+/******************************************
+      GET ALL PAYMENT BY RESERVATION   
+ ******************************************/
+payment.get("/get-all-payment-by-reservation/:id", (req, res) => {
+  Payment.findAll({
+    where: {
+      ReservationPK:  req.params.id
+    },
+  })
+    .then((result) => {
+      if (result) {
+        res.json(result);
+      } else {
+        res.send("There is no payment data.");
+      }
+    })
+    .catch((err) => {
+      res.send("error: " + err + "   " + req.params.id);
+    });
+});
+
+
+/******************************************
+   CALCULATE REFUND AMOUNT BY RESERVATION   
+ ******************************************/
+payment.get("/get-refund-amount-by-reservation/:id", (req, res) => {
+  Refund.findAll({
+    where: {
+      ReservationPK:  req.params.id
+    },
+  })
+    .then((result) => {
+      if (result) {
+        let sumTotal = 0;
+        result.forEach(element => {
+          sumTotal += element.Amount;
+        });
+        // Divide by 100 to display the Amount on UI
+        res.json(sumTotal / 100);
+      } else {
+        res.send("There is no refund data.");
+      }
+    })
+    .catch((err) => {
+      res.send("error: " + err + "   " + req.params.id);
+    });
+});
+
+
 
 
 module.exports = payment;

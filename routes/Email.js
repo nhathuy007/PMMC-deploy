@@ -8,6 +8,7 @@ const User = require('../models/User');
 const Email = require('../models/Email');
 const UserDetails = require('../models/UserDetails')
 const Schedule = require('../models/Schedule');
+const Reservation = require('../models/ReservationHeader')
 const Program = require('../models/Program');
 const fs = require("fs");
 const fileUpload = require("express-fileupload");
@@ -223,7 +224,7 @@ async function sendContactEmail(user, callback) {
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: user.subject, // Subject line
     html: `
     <h4>There is a message from ${user.name} at ${user.email}</h4><br>
@@ -297,7 +298,7 @@ async function sendResetPasswordEmail(userInfo, callback) {
     //from and to email needs to be verified in order to use SES
     // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
-    to: "uakkum@uci.edu", // need to put userInfo.Email
+    to: "hoangt5@uci.edu", // need to put userInfo.Email
     subject: 'PMMC Reset Password', // Subject line
     html: `Hi ${userInfo.Username}, <br>
     Here's the link to reset your password: 
@@ -380,7 +381,7 @@ async function sendPasswordConfirmationEmail(userInfo, callback){
     //from and to email needs to be verified in order to use SES
     // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
-    to: "uakkum@uci.edu", // need to put userInfo.Email
+    to: "hoangt5@uci.edu", // need to put userInfo.Email
     subject: "PMMC - Update Password Confirmation", // Subject line
     
     html: `<h1>Hi ${userInfo.Username},</h1><br>
@@ -392,101 +393,177 @@ async function sendPasswordConfirmationEmail(userInfo, callback){
   let info = await transporter.sendMail(mailOptions);
   callback(info);
 }
-
 /***********************************************************************
   CREATE NEW USER - SEND EMAIL CONFIRMATION AND LINK TO RESET PASSWORD
 ***********************************************************************/
+// app.post('/create-new-user-confirmation-email', (req,res) => {
+//   User.findOne({
+//     where: {          
+//       UserPK : req.body.UserPK
+//     }
+//   })
+//   .then(user =>{
+//       if(!user) {
+//         res.json({ error: 'User does not exist' })            
+//       }
+//       else{                        
+//         let userInfo = req.body
+//         userInfo.Username = user.Username
+//         userInfo.UserPK = user.UserPK
+//         userInfo.Email = user.Email
+//         userInfo.Password = user.Password  
+        
+//         Email.findOne({
+//           where: {EmailPK: 2}
+//         }).then(email => {
+//           if (email){
+//             CreateNewUserConfirmationEmail(userInfo, email, info => {
+//               console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+//               res.send(info);
+//             });
+//           }
+//         })
+        
+//       }          
+//   })
+//   .catch(err => {
+//     res.send('error: ' + err)
+//   })
+// });
+
+// async function CreateNewUserConfirmationEmail(userInfo, email, callback){
+//   tempDir = './public/uploads/email-attachments/'+email.EmailPK+'/';
+//   attachments = [];
+
+//   function addAttachments(value){
+//     console.log(value);
+//     attachments.push({filename: value, path: tempDir+value})
+//   }
+
+//   // Gather all attachment names to upload to the DB
+//   if (fs.existsSync(tempDir)) {
+//     console.log('directory exists');
+//     fs.readdirSync(tempDir).forEach(addAttachments);
+//   }
+//   console.log(attachments);
+
+//   let transporter = nodemailer.createTransport({
+//     host: process.env.emailServer_host,
+//     port: process.env.emailServer_port,
+//     secure: false, // true for 465, false for other ports
+//     auth: {
+//         //This is AWS SES credential
+//       user: process.env.emailServer_username,
+//       pass: process.env.emailServer_password
+//     }
+//   });
+
+//   //Create new token
+//   let payload = {
+//     userID: userInfo.UserPK,
+//     userEmail: userInfo.Email,
+//     userPassword : userInfo.Password
+//   };
+
+//   let token = jwt.sign(payload, process.env.SECRET_KEY, {
+//     expiresIn: 604800 //expires in 7 days
+//   })
+
+//   email.Body = email.Body.replace("{Username}", `${userInfo.Username}`).replace("{token}", `${token}`)
+
+//   //For Testing only
+//     // let decodedToken = jwt.decode(token, process.env.SECRET_KEY)
+//     // let decodeUserPK = decodedToken.userID
+//     // let decodeUserEmail = decodedToken.userEmail
+//     // let decodeUserPassword = decodedToken.userPassword
+
+//   let mailOptions = {
+//     from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
+//     to: "uakkum@uci.edu", // need to put userInfo.Email
+//     subject: email.Subject, // Subject line
+//     html: email.Body
+//     };
+
+//   let info = await transporter.sendMail(mailOptions);
+//   callback(info);
+// }
+
+/***********************************************************************
+                        ADMIN
+  CREATE NEW USER - SEND EMAIL CONFIRMATION AND LINK TO RESET PASSWORD
+***********************************************************************/
 app.post('/create-new-user-confirmation-email', (req,res) => {
-    User.findOne({
-      where: {          
-        UserPK : req.body.UserPK
+  User.findOne({
+    where: {          
+      UserPK : req.body.UserPK
+    }
+  })
+  .then(user =>{
+      if(!user) {
+        res.json({ error: 'User does not exist' })            
       }
-    })
-    .then(user =>{
-        if(!user) {
-          res.json({ error: 'User does not exist' })            
-        }
-        else{                        
-          let userInfo = req.body
-          userInfo.Username = user.Username
-          userInfo.UserPK = user.UserPK
-          userInfo.Email = user.Email
-          userInfo.Password = user.Password  
-          
-          Email.findOne({
-            where: {EmailPK: 2}
-          }).then(email => {
-            if (email){
-              CreateNewUserConfirmationEmail(userInfo, email, info => {
-                console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
-                res.send(info);
-              });
-            }
-          })
-          
-        }          
-    })
-    .catch(err => {
-      res.send('error: ' + err)
-    })
+      else{                        
+        let userInfo = req.body
+        userInfo.Username = user.Username
+        userInfo.UserPK = user.UserPK
+        userInfo.Email = user.Email
+        userInfo.Password = user.Password            
+
+        //send email to user            
+        CreateNewUserConfirmationEmail(userInfo, info => {
+            console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+            res.send(info);
+          });
+      }          
+  })
+  .catch(err => {
+    res.send('error: ' + err)
+  })
 });
 
-async function CreateNewUserConfirmationEmail(userInfo, email, callback){
-  tempDir = './public/uploads/email-attachments/'+email.EmailPK+'/';
-  attachments = [];
+async function CreateNewUserConfirmationEmail(userInfo, callback){
 
-  function addAttachments(value){
-    console.log(value);
-    attachments.push({filename: value, path: tempDir+value})
-  }
+//Create new token
+let payload = {
+  userID: userInfo.UserPK,
+  userEmail: userInfo.Email,
+  userPassword : userInfo.Password
+};
 
-  // Gather all attachment names to upload to the DB
-  if (fs.existsSync(tempDir)) {
-    console.log('directory exists');
-    fs.readdirSync(tempDir).forEach(addAttachments);
-  }
-  console.log(attachments);
+let token = jwt.sign(payload, process.env.SECRET_KEY, {
+  expiresIn: 604800 //expires in 7 days
+})
 
-  let transporter = nodemailer.createTransport({
-    host: process.env.emailServer_host,
-    port: process.env.emailServer_port,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        //This is AWS SES credential
-      user: process.env.emailServer_username,
-      pass: process.env.emailServer_password
-    }
-  });
+//For Testing only
+  // let decodedToken = jwt.decode(token, process.env.SECRET_KEY)
+  // let decodeUserPK = decodedToken.userID
+  // let decodeUserEmail = decodedToken.userEmail
+  // let decodeUserPassword = decodedToken.userPassword
 
-  //Create new token
-  let payload = {
-    userID: userInfo.UserPK,
-    userEmail: userInfo.Email,
-    userPassword : userInfo.Password
+let mailOptions = {
+  from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
+  to: "hoangt5@uci.edu", // need to put userInfo.Email
+  subject: "PMMC - New Account Confirmation", // Subject line
+  html: `<h2>Hi,</h2> <br> 
+  <p>Thank you for registering a new account with Pacific Marine Mammal Center. 
+  This account will give you the opportunity to book programs, 
+  view/modify reservations, save payment information for later use and much more. 
+  If you have any questions please do not hesitate to contact us. 
+  Lastly, for future reference we have included your username below.
+  </p>
+  <br> <h4>Your username is: ${userInfo.Username} </h4> <br>   
+  <p>You would have to set your password by following this link: </p>
+  <p>http://localhost:4200/login/reset-password/${token}</p>
+  <p>The link will expire within 7 days.</p>     
+  <p> We look forward to seeing you in the future. </p><br>     
+  <h5>If you did not request a new account, please contact us immediately.</h5>`
   };
 
-  let token = jwt.sign(payload, process.env.SECRET_KEY, {
-    expiresIn: 604800 //expires in 7 days
-  })
-
-  email.Body = email.Body.replace("{Username}", `${userInfo.Username}`).replace("{token}", `${token}`)
-  
-  //For Testing only
-    // let decodedToken = jwt.decode(token, process.env.SECRET_KEY)
-    // let decodeUserPK = decodedToken.userID
-    // let decodeUserEmail = decodedToken.userEmail
-    // let decodeUserPassword = decodedToken.userPassword
-
-  let mailOptions = {
-    from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
-    to: "uakkum@uci.edu", // need to put userInfo.Email
-    subject: email.Subject, // Subject line
-    html: email.Body
-    };
-
-  let info = await transporter.sendMail(mailOptions);
-  callback(info);
+let info = await transporter.sendMail(mailOptions);
+callback(info);
 }
+
+
 
 /***********************************************************************
   PROGRAM BOOKED - SEND EMAIL CONFIRMATION FOR PROGRAM REQUESTED
@@ -535,18 +612,7 @@ async function sendBookingRequestConfirmationEmail(userInfo, email, callback){
   if (fs.existsSync(tempDir)) {
     console.log('directory exists');
     fs.readdirSync(tempDir).forEach(addAttachments);
-  }
-
-  let transporter = nodemailer.createTransport({
-    host: process.env.emailServer_host,
-    port: process.env.emailServer_port,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        //This is AWS SES credential
-      user: process.env.emailServer_username,
-      pass: process.env.emailServer_password
-    }
-  });
+  }  
 
   //Create new token
   let payload = {
@@ -567,7 +633,7 @@ async function sendBookingRequestConfirmationEmail(userInfo, email, callback){
 
   let mailOptions = {
     from: process.env.emailServer_sponsorEmail, // sender address need to change to Sponsor email
-    to: "uakkum@uci.edu", // need to put userInfo.Email
+    to: "hoangt5@uci.edu", // need to put userInfo.Email
     subject: email.Subject, // Subject line
     html: email.Body
   };
@@ -642,26 +708,13 @@ async function sendRegistrationConfirmationEmail(email, callback) {
   if (fs.existsSync(tempDir)) {
     console.log('directory exists');
     fs.readdirSync(tempDir).forEach(addAttachments);
-  }
-  console.log(attachments);
-  // create reusable transporter object using the default SMTP transport
-  //Using AWS SES for SMTP server
-  let transporter = nodemailer.createTransport({
-    host: process.env.emailServer_host,
-    port: process.env.emailServer_port,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        //This is AWS SES credential
-      user: process.env.emailServer_username,
-      pass: process.env.emailServer_password
-    }
-  });
+  }   
 
   let mailOptions = {
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: email.Subject, // Subject line
     html: email.Body,
     attachments: this.attachments
@@ -713,20 +766,7 @@ async function sendIndividualConfirmationEmail(user, email, programName, program
     fs.readdirSync(tempDir).forEach(addAttachments);
   }
   console.log(Attachments);
-
-  // create reusable transporter object using the default SMTP transport
-  //Using AWS SES for SMTP server
-  let transporter = nodemailer.createTransport({
-    host: process.env.emailServer_host,
-    port: process.env.emailServer_port,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        //This is AWS SES credential
-      user: process.env.emailServer_username,
-      pass: process.env.emailServer_password
-    }
-  });
-
+ 
   // email.Body = email.Body.replace('{firstName}', `${user.FirstName}`);
   email.Body = email.Body.replace('{programName}', `${programName}`);
   email.Body = email.Body.replace('{programDate}', `${programDate}`);
@@ -736,7 +776,7 @@ async function sendIndividualConfirmationEmail(user, email, programName, program
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: email.Subject, // Subject line
     html: email.Body,
     // `
@@ -794,19 +834,6 @@ async function sendGroupProgramConfirmationEmail(user, email, firstName, program
   }
   console.log(Attachments);
 
-  // create reusable transporter object using the default SMTP transport
-  //Using AWS SES for SMTP server
-  let transporter = nodemailer.createTransport({
-    host: process.env.emailServer_host,
-    port: process.env.emailServer_port,
-    secure: false, // true for 465, false for other ports
-    auth: {
-        //This is AWS SES credential
-      user: process.env.emailServer_username,
-      pass: process.env.emailServer_password
-    }
-  });
-
   // email.Body = email.Body.replace('{firstName}', `${user.FirstName}`);
   email.Body = email.Body.replace('{programName}', `${programName}`);
   email.Body = email.Body.replace('{programDate}', `${programDate}`);
@@ -816,7 +843,7 @@ async function sendGroupProgramConfirmationEmail(user, email, firstName, program
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: email.Subject, // Subject line
     html: email.Body,
     // `
@@ -854,7 +881,7 @@ async function sendProgramReminderEmail(user, callback) {
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: "PMMC Upcoming Program", // Subject line
     html: `
     <i>This is a reminder about your upcoming visit to Pacific Marine Mammal 
@@ -878,10 +905,25 @@ app.post('/send-payment-confirmation-email', (req, res) => {
   User.findOne({
     where: { UserPK: req.body.UserPK }
   }).then(user => { 
-    sendPaymentConfirmationEmail(user, info => {
-      console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
-      res.send(info);
-    });
+    Reservation.findOne({
+      where: { ReservationPK: req.body.ReservationPK }
+    }).then(reservation => {
+      console.log('reservation: ' + reservation);
+      Schedule.findOne({ 
+        where: { SchedulePK: reservation.SchedulePK }
+        }).then (schedule => {
+          Program.findOne({ 
+            where: { ProgramPK: schedule.ProgramPK }
+            }).then( program => {
+              programDate = new Date(schedule.Start);
+              programDate = programDate.toDateString() + ' at ' + convertTime(programDate.toTimeString().slice(0,5))
+              sendPaymentConfirmationEmail(user, req.body.Total, program.Name, programDate, info => {
+                console.log(`The mail has been sent 😃 and the id is ${info.messageId}`);
+                res.send(info);
+          });
+        })
+      })
+    })
   })
 });
 
@@ -891,11 +933,11 @@ async function sendPaymentConfirmationEmail(user, payment, programName, programD
       //from and to email needs to be verified in order to use SES
       // otherwise, need to upgrade to Premium
     from: process.env.emailServer_sponsorEmail, // sender address
-    to: "uakkum@uci.edu", // list of receivers
+    to: "hoangt5@uci.edu", // list of receivers
     subject: "PMMC Payment Confirmation", // Subject line
     html: `
-    <i>Thank you for your payment of ${payment} for your program with 
-    Pacific Marine Mammal Center ${programName} at ${programDate}. All 
+    <i>Thank you for your payment of \$${payment} for your program with 
+    Pacific Marine Mammal Center ${programName} on ${programDate}. All 
     education program proceeds help support our seal and sea lion patients!</i>
     <br/>
     <i>We look forward to having you join us. See you soon! </i>`
@@ -1043,12 +1085,52 @@ async function sendEmailReservationCancelation(reservationInfo, callback) {
 
   //Email cancelation from customer dashboard
   else if(reservationInfo.mode === "cancelindividualreservation"){
-    
+    var mailOptions = {
+      // from and to email needs to be verified in order to use SES
+      // otherwise, need to upgrade to Premium
+      from: process.env.emailServer_sponsorEmail, // sender address
+      bcc: reservationInfo.EmailList, // list of receivers
+      subject: "Confirmation of cancelation at Pacific Marine Mammal Center", // Subject line
+      html: `
+      <h5> Hi, </h5>
+      <p>This is the confirmation that your reservation for
+      <b>${reservationInfo.ProgramName}</b> on <b>${date}, ${startTime} - ${endTime}</b>
+      has been successfully canceled. The program fee is non-refundable. However, 
+      if the slot is filled, your payment for this reservation will be refunded.
+      </p>      
+      </p>
+      <p>If you have any questions, please feel free to contact us at (949)-494-3050 or 
+      email at info@pacificmmc.org.
+      </p>
+      <br/>
+      <p>We look forward to seeing you again in the future!</p>
+      `
+    };
   }
 
   //Email cancelation from customer dashboard
   else if(reservationInfo.mode === "cancelgroupreservation"){
-    
+    var mailOptions = {
+      // from and to email needs to be verified in order to use SES
+      // otherwise, need to upgrade to Premium
+      from: process.env.emailServer_sponsorEmail, // sender address
+      bcc: reservationInfo.EmailList, // list of receivers
+      subject: "Confirmation of cancelation at Pacific Marine Mammal Center", // Subject line
+      html: `
+      <h5> Hi, </h5>
+      <p>This is the confirmation that your reservation for
+      <b>${reservationInfo.ProgramName}</b> on <b>${date}, ${startTime} - ${endTime}</b>
+      has been successfully canceled. We will collect the $25 deposit and refund the rest of your payment. 
+      You will receive an email once the refund has been issued.
+      </p>      
+      </p>
+      <p>If you have any questions, please feel free to contact us at (949)-494-3050 or 
+      email at info@pacificmmc.org.
+      </p>
+      <br/>
+      <p>We look forward to seeing you again in the future!</p>
+      `
+    };
   }
 
   let info = await transporter.sendMail(mailOptions);
